@@ -239,4 +239,51 @@ export const styles = `
             width: 100%;
         }
     }
+
+    .verified-container {
+        background: #f0fdf4;
+        border-radius: 12px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        border: 1px solid #86efac;
+    }
+
+    .token-info {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.75rem;
+        color: #e5e7eb;
+    }
+
+    .token-value {
+        color: #93c5fd;
+        padding: 0.25rem 0.5rem;
+        background: rgba(147, 197, 253, 0.1);
+        border-radius: 4px;
+        margin-left: 0.5rem;
+    }
+
+    .test-container {
+        margin-top: 1rem;
+    }
+
+    .test-button {
+        background: #059669;
+    }
+
+    .test-button:hover {
+        background: #047857;
+    }
+
+    .reset-button {
+        background: #dc2626;
+    }
+
+    .reset-button:hover {
+        background: #b91c1c;
+    }
+
 `;

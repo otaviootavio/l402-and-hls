@@ -18,6 +18,9 @@
 
       <div class="button-container">
         <button id="accessBtn">Request Access</button>
+        <button id="resetBtn" style="display: none" class="reset-button">
+          Reset Session
+        </button>
       </div>
 
       <div id="paymentInfo" style="display: none">
@@ -46,6 +49,26 @@
         </div>
       </div>
 
+      <div id="verifiedInfo" style="display: none" class="verified-container">
+        <h3>🎉 Payment Verified!</h3>
+        <p>Your access token is valid for this session.</p>
+        <div class="token-info">
+          <p><strong>Session Details:</strong></p>
+          <p>Status: <span id="tokenStatus">Active</span></p>
+          <p>
+            Macaroon: <span id="tokenMacaroon" class="token-value">...</span>
+          </p>
+          <p>
+            Preimage: <span id="tokenPreimage" class="token-value">...</span>
+          </p>
+        </div>
+        <div class="test-container">
+          <button id="testAccessBtn" class="test-button">
+            Test Access Again
+          </button>
+        </div>
+      </div>
+
       <div id="error" class="message error" style="display: none"></div>
       <div id="success" class="message success" style="display: none"></div>
 
@@ -54,9 +77,10 @@
 
     <script type="module">
       import { styles } from "./js/styles.js";
-      import { requestAccess, verifyPayment } from "./js/api.js";
+      import { requestAccess, verifyPayment, testAccess } from "./js/api.js";
       import { validatePreimage } from "./js/auth.js";
-      import { copyInvoice } from "./js/ui.js";
+      import { copyInvoice, resetSession } from "./js/ui.js";
+      import { getState } from "./js/state.js";
 
       // Add styles
       const styleSheet = document.createElement("style");
@@ -69,10 +93,33 @@
         .addEventListener("click", requestAccess);
       document
         .getElementById("verifyBtn")
-        .addEventListener("click", verifyPayment);
+        .addEventListener("click", async () => {
+          const success = await verifyPayment();
+          if (success) {
+            const state = getState();
+            document.getElementById("paymentInfo").style.display = "none";
+            document.getElementById("verifiedInfo").style.display = "block";
+            document.getElementById("resetBtn").style.display = "block";
+            document.getElementById("accessBtn").style.display = "none";
+
+            // Display token info (truncated for security)
+            document.getElementById(
+              "tokenMacaroon"
+            ).textContent = `${state.currentMacaroon.substring(0, 20)}...`;
+            document.getElementById(
+              "tokenPreimage"
+            ).textContent = `${state.currentPreimage.substring(0, 20)}...`;
+          }
+        });
       document
         .getElementById("preimage")
         .addEventListener("input", (e) => validatePreimage(e.target.value));
+      document
+        .getElementById("resetBtn")
+        .addEventListener("click", resetSession);
+      document
+        .getElementById("testAccessBtn")
+        .addEventListener("click", testAccess);
 
       // Expose necessary functions to window for inline HTML handlers
       window.l402 = {

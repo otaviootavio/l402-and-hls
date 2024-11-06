@@ -1,9 +1,10 @@
 import { logDebug } from './logger.js';
-import { updateState, getInvoice } from './state.js';
+import { updateState, getInvoice, getState } from './state.js';
 import { QR_CONFIG } from './config.js';
 
 export function showPaymentInfo(data) {
     document.getElementById('paymentInfo').style.display = 'block';
+    document.getElementById('verifiedInfo').style.display = 'none';
     document.getElementById('amount').textContent = data.price || 0;
     document.getElementById('paymentDescription').textContent = data.description || '';
     document.getElementById('invoice').textContent = data.invoice;
@@ -82,4 +83,27 @@ export function copyInvoice() {
                 });
             });
     }
+}
+
+export function resetSession() {
+    // Reset state
+    updateState({
+        currentMacaroon: '',
+        currentPreimage: '',
+        currentInvoice: '',
+        isConnected: false
+    });
+
+    // Reset UI
+    document.getElementById('paymentInfo').style.display = 'none';
+    document.getElementById('verifiedInfo').style.display = 'none';
+    document.getElementById('preimage').value = '';
+    document.getElementById('resetBtn').style.display = 'none';
+    document.getElementById('accessBtn').style.display = 'block';
+    document.getElementById('qrcode').innerHTML = '';
+    
+    // Reset status
+    updateStatus('Not Connected', false);
+    
+    logDebug('session-reset', { timestamp: new Date().toISOString() });
 }

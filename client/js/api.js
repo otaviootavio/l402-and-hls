@@ -1,5 +1,5 @@
 import { API_URL } from './config.js';
-import { updateState, getMacaroon } from './state.js';
+import { updateState, getMacaroon, getState } from './state.js';
 import { logDebug } from './logger.js';
 import { parseAuthHeader } from './auth.js';
 import { showError, showSuccess, showPaymentInfo, updateStatus } from './ui.js';
@@ -47,7 +47,7 @@ export async function verifyPayment() {
     
     if (!macaroon || !preimage) {
         showError('Missing macaroon or preimage');
-        return;
+        return false;
     }
 
     try {
@@ -66,16 +66,52 @@ export async function verifyPayment() {
         });
 
         if (response.ok) {
-            updateState({ isConnected: true });
+            updateState({ 
+                isConnected: true,
+                currentPreimage: preimage
+            });
             showSuccess('Payment verified successfully!');
             updateStatus('Connected', true);
-            document.getElementById('paymentInfo').style.display = 'none';
+            return true;
         } else {
             const error = await response.json();
             showError(`Verification failed: ${error.message}`);
+            return false;
         }
     } catch (error) {
         showError(`Verification failed: ${error.message}`);
         logDebug('verify-error', { error: error.message });
+        return false;
+    }
+}
+
+export async function testAccess() {
+    const state = getState();
+    if (!state.isConnected) {
+        showError('Not connected. Please verify payment first.');
+        return;
+    }
+
+    try {
+        const response = await fetch(API_URL, {
+            headers: {
+                'Authorization': `L402 ${state.currentMacaroon}:${state.currentPreimage}`
+            }
+        });
+
+        logDebug('test-access-request', {
+            url: API_URL,
+            status: response.status
+        });
+
+        if (response.ok) {
+            showSuccess('Access test successful!');
+        } else {
+            const error = await response.json();
+            showError(`Access test failed: ${error.message}`);
+        }
+    } catch (error) {
+        showError(`Access test failed: ${error.message}`);
+        logDebug('test-access-error', { error: error.message });
     }
 }
