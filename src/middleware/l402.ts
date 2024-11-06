@@ -105,8 +105,6 @@ export class L402Middleware {
         description: this.config.description,
       });
 
-      console.log("Created invoice:", createdInvoice); // For debugging
-
       const paymentHash = createdInvoice.id;
       const expiryTime = Date.now() + this.config.timeoutSeconds * 1000;
       const macaroon = this.createMacaroon(paymentHash, expiryTime);
@@ -207,14 +205,11 @@ export class L402Middleware {
 
   private async verifyLightningPayment(paymentHash: string): Promise<boolean> {
     try {
-      console.log("Verifying payment hash:", paymentHash);
-
       const invoice = await getInvoice({
         lnd: this.lnd,
         id: paymentHash,
       });
 
-      console.log("Invoice details:", invoice);
       return invoice.is_confirmed;
     } catch (error) {
       console.error("Verification error:", error);
@@ -255,12 +250,6 @@ export class L402Middleware {
       // Debug the string manipulation
       const tokenPart = authHeader.slice(CONSTANTS.AUTH_SCHEME.length + 1);
 
-      // Check for the separator in the string
-      console.log(
-        "Separator exists at:",
-        tokenPart.indexOf(CONSTANTS.TOKEN_SEPARATOR)
-      );
-
       const parts = tokenPart.split(CONSTANTS.TOKEN_SEPARATOR);
 
       const [macaroon, preimage] = parts;
@@ -275,9 +264,6 @@ export class L402Middleware {
 
       const macaroonData = this.verifyMacaroon(macaroon);
       this.validatePreimage(preimage, macaroonData.paymentHash);
-
-      console.log("Macaroon data:", macaroonData);
-      console.log("Preimage validated, attempting payment verification");
 
       const isPaid = await this.verifyLightningPayment(
         macaroonData.paymentHash
