@@ -37,7 +37,33 @@ L402_TIMEOUT=3600
 
 ## Component Roles
 
-[Previous sections remain the same until Middleware]
+### 1. Types (types/index.ts)
+
+Contains all TypeScript interfaces and types used throughout the application:
+
+- `ProxyConfig`: Configuration interface
+- `CacheEntry`: Cache data structure
+- `ICache`: Cache service interface
+- `IPlaylistRewriter`: Playlist rewriting interface
+- `IContentTypeResolver`: Content type handling interface
+- `IProxyService`: Main proxy service interface
+- `ProxyResponse`: Response data structure
+
+### 2. Config (config/config.ts)
+
+Centralizes application configuration:
+
+- Stream base URL
+- Server port
+- Cache durations for manifests and segments
+
+### 3. Controllers (controllers/hls-controller.ts)
+
+Handles HTTP requests:
+
+- `handleHLSRequest`: Processes HLS stream requests
+- `handleHealthCheck`: Server health endpoint
+- Routes requests to appropriate services
 
 ### 4. Middleware
 
@@ -54,9 +80,51 @@ Contains Express middleware:
 - Token validation and verification
 - Macaroon handling
 
-### 5. Services
+## 5. Services
 
-[Remaining sections stay the same until Key Features]
+Core business logic implementations:
+
+#### Cache Service (services/cache.ts)
+
+- In-memory caching implementation
+- Cache entry management
+- Automatic cache cleaning
+
+#### Playlist Rewriter (services/playlist-rewriter.ts)
+
+- M3U8 playlist parsing
+- URL rewriting for proxy paths
+- Manifest file handling
+
+#### Content Type Resolver (services/content-type-resolver.ts)
+
+- File type detection
+- MIME type resolution
+- Content-Type header management
+
+#### Proxy Service (services/proxy-service.ts)
+
+- Main proxy logic
+- Request handling
+- Response processing
+- Error management
+
+### 6. Entry Point (index.ts)
+
+Application bootstrap:
+
+- Dependency initialization
+- Middleware setup
+- Route configuration
+- Server startup
+
+## Key Features
+
+1. SOLID Principles Implementation
+2. Dependency Injection
+3. Interface-based Design
+4. Modular Architecture
+5. Clear Separation of Concerns
 
 ## Key Features
 
