@@ -64,7 +64,15 @@ async function main() {
   const app = express();
 
   // Middleware
-  app.use(cors());
+  app.use(
+    cors({
+      exposedHeaders: ["WWW-Authenticate"],
+      credentials: true,
+      origin: "*",
+      methods: ["GET", "POST", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "WWW-Authenticate"],
+    })
+  );
   app.use(compression());
   app.use(express.json());
   app.use(createRateLimiter());
