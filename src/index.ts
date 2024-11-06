@@ -32,18 +32,29 @@ const initializeLnd = async () => {
 
 async function main() {
   // Initialize LND and L402
-  const lnd = await initializeLnd();
-
+  const { lnd } = await authenticatedLndGrpc({
+    socket: process.env.LND_SOCKET,
+    macaroon: process.env.LND_MACAROON,
+    cert: process.env.LND_CERT,
+  });
   // Create L402 middleware
-  const l402 = new L402Middleware(
-    {
-      secret: process.env.L402_SECRET ?? "",
-      priceSats: Number(process.env.L402_PRICE_SATS) || 1000,
-      timeoutSeconds: Number(process.env.L402_TIMEOUT_SECONDS) || 3600,
-      description: "API Access Token",
+  const l402 = new L402Middleware({
+    secret: process.env.L402_SECRET!,
+    priceSats: Number(process.env.L402_PRICE_SATS) || 1000,
+    timeoutSeconds: Number(process.env.L402_TIMEOUT_SECONDS) || 3600,
+    description: "API Access Token",
+    keyId: process.env.L402_KEY_ID ?? "default",
+    maxTokenUses: 1000,
+    retryConfig: {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      timeoutMs: 5000,
     },
-    lnd
-  );
+    rateLimitConfig: {
+      windowMs: 60000,
+      maxRequests: 100,
+    }
+  }, lnd);
 
   // Initialize dependencies
   const cache = new MemoryCache(config);
@@ -81,6 +92,15 @@ async function main() {
   app.get("/test/pay", l402.authorize, hlsController.handleHealthCheck);
   app.get("/hls/*", l402.authorize, hlsController.handleHLSRequest);
   app.get("/health", hlsController.handleHealthCheck);
+
+  app.get('/metrics', async (req, res) => {
+    try {
+      const metrics = await l402.getMetrics();
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get metrics' });
+    }
+  });
 
   // Start server
   app.listen(config.PORT, () => {
