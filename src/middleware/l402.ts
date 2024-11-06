@@ -48,10 +48,10 @@ export class L402Middleware {
         500
       );
     }
+
     if (
       !Number.isInteger(config.timeoutSeconds) ||
-      config.timeoutSeconds <= 0 ||
-      config.timeoutSeconds > CONSTANTS.MAX_TIMEOUT_SECONDS
+      config.timeoutSeconds <= 0
     ) {
       throw new L402Error(
         'Invalid timeout configuration',

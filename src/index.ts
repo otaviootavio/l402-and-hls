@@ -11,24 +11,10 @@ import { HLSController } from "./controllers/hls-controller";
 import { createRateLimiter } from "./middleware/rate-limiter";
 import { L402Middleware } from "./middleware/l402";
 import { authenticatedLndGrpc } from "lightning";
+import { CONSTANTS } from "./constants";
 
 // Load environment variables
 dotenv.config();
-
-// Initialize LND client
-const initializeLnd = async () => {
-  try {
-    const { lnd } = await authenticatedLndGrpc({
-      socket: process.env.LND_SOCKET || "127.0.0.1:10009",
-      macaroon: process.env.LND_MACAROON,
-      cert: process.env.LND_CERT,
-    });
-    return lnd;
-  } catch (error) {
-    console.error("Failed to initialize LND:", error);
-    throw error;
-  }
-};
 
 async function main() {
   // Initialize LND and L402
@@ -40,8 +26,8 @@ async function main() {
   // Create L402 middleware
   const l402 = new L402Middleware({
     secret: process.env.L402_SECRET!,
-    priceSats: Number(process.env.L402_PRICE_SATS) || 1000,
-    timeoutSeconds: Number(process.env.L402_TIMEOUT_SECONDS) || 3600,
+    priceSats: CONSTANTS.MIN_PRICE_SATS || 1000,
+    timeoutSeconds: CONSTANTS.MAX_TIMEOUT_SECONDS || 3600,
     description: "API Access Token",
     keyId: process.env.L402_KEY_ID ?? "default",
     maxTokenUses: 1000,
@@ -53,7 +39,7 @@ async function main() {
     rateLimitConfig: {
       windowMs: 60000,
       maxRequests: 100,
-    }
+    },
   }, lnd);
 
   // Initialize dependencies
@@ -97,7 +83,9 @@ async function main() {
     try {
       const metrics = await l402.getMetrics();
       res.json(metrics);
-    } catch (error) {
+    // eslint-disable-next-line  @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      console.log("Error:", error.message)
       res.status(500).json({ error: 'Failed to get metrics' });
     }
   });

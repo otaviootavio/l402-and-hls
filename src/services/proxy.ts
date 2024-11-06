@@ -84,7 +84,9 @@ export class ProxyService implements IProxyService {
     console.error("Proxy error:", errorResponse);
 
     const enhancedError = new Error(error.message);
+    // eslint-disable-next-line  @typescript-eslint/no-explicit-any
     (enhancedError as any).status = error.response?.status || 500;
+    // eslint-disable-next-line  @typescript-eslint/no-explicit-any
     (enhancedError as any).details = errorResponse;
 
     return enhancedError;

@@ -5,7 +5,7 @@ export const CONSTANTS = {
     TOKEN_SEPARATOR: ':',
     DEFAULT_VERSION: 1,
     MIN_PRICE_SATS: 1,
-    MAX_TIMEOUT_SECONDS: 86400, // 24 hours
+    MAX_TIMEOUT_SECONDS: 10000,
     ALLOWED_HEADERS: ['authorization', 'content-type'] as const,
   } as const;
   

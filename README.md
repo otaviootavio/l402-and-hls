@@ -9,7 +9,11 @@ A SOLID-based TypeScript implementation of an HLS (HTTP Live Streaming) proxy se
 ```
 src/
 ├── types/
-│   └── index.ts           # Central type definitions and interfaces
+│   ├── index.ts           # Type exports barrel file
+│   ├── config.ts          # Configuration interfaces
+│   ├── token.ts           # Token related interfaces
+│   ├── storage.ts         # Storage interfaces
+│   └── logger.ts          # Logger interfaces
 ├── config/
 │   └── config.ts          # Application configuration
 ├── controllers/
@@ -18,11 +22,24 @@ src/
 │   ├── rate-limiter.ts    # Rate limiting middleware
 │   └── l402.ts           # L402 payment authentication
 ├── services/
-│   ├── cache.ts           # Caching implementation
+│   ├── cache.ts          # Caching implementation
 │   ├── playlist-rewriter.ts    # M3U8 playlist URL rewriter
 │   ├── content-type-resolver.ts # Content type handler
-│   └── proxy-service.ts   # Core proxy logic
-└── index.ts              # Application entry point
+│   ├── lightning.ts      # Lightning Network service
+│   ├── retry.ts         # Retry operation service
+│   ├── macaroon.ts      # Macaroon handling service
+│   └── proxy-service.ts  # Core proxy logic
+├── storage/
+│   ├── index.ts         # Storage exports
+│   └── memory.ts        # Memory storage implementation
+├── logger/
+│   ├── index.ts         # Logger exports
+│   └── console.ts       # Console logger implementation
+├── errors/
+│   └── L402Error.ts     # Error definitions
+├── constants/
+│   └── index.ts         # Constants definition
+└── index.ts            # Application entry point
 ```
 
 ## Environment Variables
@@ -32,174 +49,65 @@ Create a `.env` file in the root directory:
 ```env
 L402_SECRET=your-secret-key-here
 L402_PRICE=1000
-L402_TIMEOUT=3600
+L402_TIMEOUT=10
+LND_SOCKET=127.0.0.1:10009
+LND_MACAROON=your-macaroon-here
+LND_CERT=your-cert-here
 ```
 
 ## Component Roles
 
-### 1. Types (types/index.ts)
+### 1. Types
+- Separated into domain-specific interfaces
+- Central type definitions for each component
+- Type exports through barrel files
 
-Contains all TypeScript interfaces and types used throughout the application:
+### 2. Services
+Core business logic implementations now include:
+- Lightning Network service
+- Retry operation handling
+- Macaroon token management
+- Original proxy and cache services
 
-- `ProxyConfig`: Configuration interface
-- `CacheEntry`: Cache data structure
-- `ICache`: Cache service interface
-- `IPlaylistRewriter`: Playlist rewriting interface
-- `IContentTypeResolver`: Content type handling interface
-- `IProxyService`: Main proxy service interface
-- `ProxyResponse`: Response data structure
+### 3. Storage
+- Interface-based storage abstraction
+- Memory storage implementation
+- Metrics and cleanup capabilities
 
-### 2. Config (config/config.ts)
+### 4. Logger
+- Structured logging interface
+- Console logger implementation
+- Log level management
 
-Centralizes application configuration:
+[Rest of the README remains the same...]
 
-- Stream base URL
-- Server port
-- Cache durations for manifests and segments
+## Additional Features
 
-### 3. Controllers (controllers/hls-controller.ts)
+1. Structured Logging
+2. Storage Metrics
+3. Health Checking
+4. Retry Mechanisms
+5. Error Handling
+6. Token Management
+7. Header Sanitization
 
-Handles HTTP requests:
-
-- `handleHLSRequest`: Processes HLS stream requests
-- `handleHealthCheck`: Server health endpoint
-- Routes requests to appropriate services
-
-### 4. Middleware
-
-Contains Express middleware:
-
-#### Rate Limiter (middleware/rate-limiter.ts)
-
-- Rate limiting configuration
-- Request throttling implementation
-
-#### L402 Middleware (middleware/l402.ts)
-
-- Lightning Network payment authentication
-- Token validation and verification
-- Macaroon handling
-
-## 5. Services
-
-Core business logic implementations:
-
-#### Cache Service (services/cache.ts)
-
-- In-memory caching implementation
-- Cache entry management
-- Automatic cache cleaning
-
-#### Playlist Rewriter (services/playlist-rewriter.ts)
-
-- M3U8 playlist parsing
-- URL rewriting for proxy paths
-- Manifest file handling
-
-#### Content Type Resolver (services/content-type-resolver.ts)
-
-- File type detection
-- MIME type resolution
-- Content-Type header management
-
-#### Proxy Service (services/proxy-service.ts)
-
-- Main proxy logic
-- Request handling
-- Response processing
-- Error management
-
-### 6. Entry Point (index.ts)
-
-Application bootstrap:
-
-- Dependency initialization
-- Middleware setup
-- Route configuration
-- Server startup
-
-## Key Features
-
-1. SOLID Principles Implementation
-2. Dependency Injection
-3. Interface-based Design
-4. Modular Architecture
-5. Clear Separation of Concerns
-
-## How Components Interact
-
-1. Request Flow:
+## Service Dependencies
 
 ```
-Client Request
-     ↓
-Rate Limiter
-     ↓
-L402 Authentication
-     ↓
-HLS Controller
-     ↓
-Proxy Service
-     ↓
-Cache Check → Cache Service
-     ↓
-URL Rewriting → Playlist Rewriter
-     ↓
-Content Type → Content Type Resolver
-     ↓
-Response to Client
-```
-
-2. L402 Authentication Flow:
-
-```
-Request with no token
-     ↓
-Generate Challenge
-     ↓
-Return 402 with WWW-Authenticate header
-     ↓
-Client makes payment and gets preimage
-     ↓
-Request with L402 token
-     ↓
-Verify macaroon and preimage
-     ↓
-Allow access to protected content
-```
-
-3. Service Dependencies:
-
-```
-HLS Controller
-    ↓
-Proxy Service
-    ↓
-├── Cache Service
-├── Playlist Rewriter
-└── Content Type Resolver
-
 L402 Middleware
     ↓
-Token Verification
+├── Lightning Service
+├── Retry Service
+├── Macaroon Service
+├── Storage Service
+└── Logger Service
 ```
 
-## Environment Setup
-
-1. Install dependencies:
-
-```bash
-npm install dotenv
-```
-
-2. Create environment files:
-
-- `.env`: Contains actual configuration values
-- `.env.example`: Template for required environment variables
-- Add `.env` to `.gitignore`
-
-3. Required environment variables:
+## Required environment variables:
 
 - `L402_SECRET`: Secret key for macaroon signing
 - `L402_PRICE`: Price in satoshis for content access
 - `L402_TIMEOUT`: Token validity period in seconds
+- `LND_SOCKET`: LND node socket address
+- `LND_MACAROON`: Base64 encoded macaroon
+- `LND_CERT`: Base64 encoded TLS certificate

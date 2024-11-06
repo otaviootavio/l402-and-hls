@@ -25,6 +25,7 @@ export class HLSController {
       res.setHeader("Cache-Control", `public, max-age=${maxAge}`);
 
       res.send(response.data);
+      // eslint-disable-next-line  @typescript-eslint/no-explicit-any
     } catch (error: any) {
       res.status(error.status || 500).json({
         error: error.message,
