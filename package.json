@@ -3,7 +3,6 @@
   "module": "index.ts",
   "type": "module",
   "devDependencies": {
-    "@types/bun": "latest",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0"
@@ -12,7 +11,6 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@types/express-rate-limit": "^6.0.2",
     "axios": "^1.7.7",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
