@@ -126,15 +126,6 @@ Application bootstrap:
 4. Modular Architecture
 5. Clear Separation of Concerns
 
-## Key Features
-
-1. SOLID Principles Implementation
-2. Dependency Injection
-3. Interface-based Design
-4. Modular Architecture
-5. Clear Separation of Concerns
-6. L402 Payment Authentication
-
 ## How Components Interact
 
 1. Request Flow:
@@ -212,17 +203,3 @@ npm install dotenv
 - `L402_SECRET`: Secret key for macaroon signing
 - `L402_PRICE`: Price in satoshis for content access
 - `L402_TIMEOUT`: Token validity period in seconds
-
-## Security Considerations
-
-1. L402 Implementation:
-
-   - Secure macaroon handling
-   - Cryptographic verification of payments
-   - Token expiration management
-   - Protection against replay attacks
-
-2. Environment Variables:
-   - Secure secret key management
-   - Environment-specific configurations
-   - Production security best practices
