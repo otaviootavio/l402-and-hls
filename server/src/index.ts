@@ -12,7 +12,7 @@ import { HLSController } from "./controllers/hls-controller";
 
 import { createRateLimiter } from "./middleware/rate-limiter";
 import { L402Middleware } from "./middleware/l402/l402";
-import { CONSTANTS } from "./middleware/l402/contants";
+import { CONSTANTS } from "./config/contants";
 
 import { authenticatedLndGrpc } from "lightning";
 
@@ -84,17 +84,6 @@ async function main() {
   app.get("/test/pay", l402.authorize, hlsController.handleHealthCheck);
   app.get("/hls/*", l402.authorize, hlsController.handleHLSRequest);
   app.get("/health", hlsController.handleHealthCheck);
-
-  app.get("/metrics", async (req, res) => {
-    try {
-      const metrics = await l402.getMetrics();
-      res.json(metrics);
-      // eslint-disable-next-line  @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.log("Error:", error.message);
-      res.status(500).json({ error: "Failed to get metrics" });
-    }
-  });
 
   // Start server
   app.listen(proxyConfig.PORT, () => {
