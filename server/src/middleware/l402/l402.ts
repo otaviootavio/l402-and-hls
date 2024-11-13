@@ -183,8 +183,7 @@ export class L402Middleware {
       );
 
       const paymentHash = createdInvoice.id;
-      const expiryTime = this.config.timeoutSeconds;
-      console.log("expiryTime", expiryTime);
+      const expiryTime = Date.now() + this.config.timeoutSeconds * 1000;
       const macaroon = this.macaroonService.create(
         paymentHash,
         expiryTime,
