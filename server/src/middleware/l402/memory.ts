@@ -1,11 +1,11 @@
-import type { L402Storage, L402StorageMetrics } from "../types/storage";
-import type { L402Token } from "../types/token";
+import type { L402Storage, L402StorageMetrics } from "./types/storage";
+import type { L402Token } from "./types/token";
 
 export class MemoryL402Storage implements L402Storage {
   private readonly tokenUsage: Map<string, number>;
   private readonly revokedTokens: Set<string>;
   private readonly tokens: Map<string, L402Token>;
-  
+
   constructor() {
     this.tokenUsage = new Map();
     this.revokedTokens = new Set();
@@ -38,7 +38,7 @@ export class MemoryL402Storage implements L402Storage {
   // Utility method for cleanup (can be called periodically)
   async cleanup(maxAge: number = 24 * 60 * 60 * 1000): Promise<void> {
     const now = Date.now();
-    
+
     for (const [paymentHash, token] of this.tokens) {
       if (token.expiry < now || now - token.expiry > maxAge) {
         this.tokens.delete(paymentHash);
@@ -54,8 +54,10 @@ export class MemoryL402Storage implements L402Storage {
     revokedTokens: number;
     totalUsage: number;
   }> {
-    const totalUsage = Array.from(this.tokenUsage.values())
-      .reduce((sum, usage) => sum + usage, 0);
+    const totalUsage = Array.from(this.tokenUsage.values()).reduce(
+      (sum, usage) => sum + usage,
+      0
+    );
 
     return {
       activeTokens: this.tokens.size,
@@ -68,8 +70,7 @@ export class MemoryL402Storage implements L402Storage {
     return {
       activeTokens: this.tokens.size,
       revokedTokens: this.revokedTokens.size,
-      totalPayments: this.tokenUsage.size
+      totalPayments: this.tokenUsage.size,
     };
   }
-
 }
