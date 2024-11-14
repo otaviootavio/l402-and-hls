@@ -1,7 +1,7 @@
 import { createInvoice, getInvoice, type AuthenticatedLnd } from "lightning";
 import type { RetryService } from "./retry";
 import { L402Error } from "../middleware/l402/L402Error";
-import type { L402Logger } from "../middleware/l402/logger";
+import type { L402Logger } from "../middleware/l402/types/logger";
 
 export class LNDService {
   constructor(

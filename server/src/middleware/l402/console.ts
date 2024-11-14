@@ -1,4 +1,4 @@
-import type { L402Logger, LogEntry, LogLevel } from "../types/logger";
+import type { L402Logger, LogEntry, LogLevel } from "./types/logger";
 
 // eslint-disable-next-line  @typescript-eslint/no-explicit-any
 type ConsoleLogMethod = (message?: any, ...optionalParams: any[]) => void;

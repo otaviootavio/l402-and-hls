@@ -8,7 +8,7 @@ import crypto from "crypto";
 import { CONSTANTS } from "../../config/contants";
 import { MemoryL402Storage } from "./memory";
 import type { L402Storage } from "./types/storage";
-import type { L402Logger } from "./logger";
+import type { L402Logger } from "./types/logger";
 import type { L402Config } from "./types/config";
 import type { L402Token } from "./types/token";
 import { L402Error } from "./L402Error";
