@@ -1,101 +1,218 @@
-import { CONSTANTS } from "../../config/contants";
-import { L402Error } from "./L402Error";
-import type { MacaroonMinter, MacaroonMinterConfig, MacaroonMinterVerifyResult, MacaroonMintResult } from "./types/macaroon-minter";
-import type { MacaroonMetadata, SignedMacaroonData, VersionedMacaroonData } from "./types/token";
-import crypto from "crypto";
+import crypto from 'crypto';
+import { CONSTANTS } from '../../config/contants';
+import { L402Error } from './L402Error';
+import { DefaultMacaroonBuilder } from './macaroon-builder';
+import type {
+    MacaroonMinter,
+    MacaroonMinterConfig,
+    MacaroonMintResult,
+    MacaroonVerificationResult,
+    L402Macaroon,
+    MacaroonCaveat,
+    ThirdPartyCaveat,
+    MacaroonIdentifier,
+    CaveatCondition
+} from './types/token';
 
 export class DefaultMacaroonMinter implements MacaroonMinter {
-    constructor(private readonly config: MacaroonMinterConfig) { }
+    private readonly builder: DefaultMacaroonBuilder;
 
-    mint({
+    constructor(private readonly config: MacaroonMinterConfig) {
+        this.builder = new DefaultMacaroonBuilder(config.secret);
+    }
+
+    public mint({
         paymentHash,
         expiryTime,
-        metadata
-    }: Parameters<MacaroonMinter["mint"]>[0]): MacaroonMintResult {
-        const macaroonData: VersionedMacaroonData = {
-            version: CONSTANTS.DEFAULT_VERSION,
-            keyId: this.config.keyId,
-            paymentHash,
-            timestamp: Date.now(),
-            expiryTime: expiryTime || Date.now() + (this.config.defaultExpirySeconds * 1000),
-            metadata: metadata as MacaroonMetadata
-        };
-
-        const signature = this.sign(macaroonData);
-        const signedData: SignedMacaroonData = { ...macaroonData, signature };
-        const macaroon = Buffer.from(JSON.stringify(signedData)).toString("base64");
-
-        return { macaroon, paymentHash };
-    }
-
-
-    verify({ macaroon, preimage }: Parameters<MacaroonMinter["verify"]>[0]): MacaroonMinterVerifyResult {
+        metadata = {}
+    }: Parameters<MacaroonMinter['mint']>[0]): MacaroonMintResult {
         try {
-            const data = this.verifySignature(macaroon);
-            this.verifyPreimage(preimage, data.paymentHash);
+            const capabilities = this.formatCapabilities(metadata.capabilities);
+            const actualExpiryTime = this.calculateExpiryTime(expiryTime);
+            const identifier = this.createIdentifier(paymentHash);
 
-            return { isValid: true, data };
+            const macaroon = this.builder
+                .setLocation(this.config.serviceName)
+                .setIdentifier(identifier)
+                .buildL402Macaroon({
+                    paymentAmount: this.validatePaymentAmount(metadata.price),
+                    service: this.config.serviceName,
+                    tier: this.config.defaultTier,
+                    capabilities: this.validateCapabilities(capabilities),
+                    expiresAt: actualExpiryTime,
+                });
+
+            return {
+                macaroon: Buffer.from(JSON.stringify(macaroon)).toString('base64url'),
+                paymentHash
+            };
         } catch (error) {
-            if (error instanceof L402Error) {
-                return { isValid: false, data: null };
-            }
-            throw error;
-        }
-    }
-
-    async revoke(paymentHash: string): Promise<void> {
-        throw new Error("Not implemented");
-    }
-
-    private verifySignature(macaroon: string): SignedMacaroonData {
-        try {
-            const decodedMacaroon: SignedMacaroonData = JSON.parse(
-                Buffer.from(macaroon, "base64").toString()
+            throw new L402Error(
+                'Failed to mint macaroon',
+                'MINT_ERROR',
+                500,
+                error
             );
-
-            const { signature, ...data } = decodedMacaroon;
-            const expectedSignature = this.sign(data);
-
-            if (!crypto.timingSafeEqual(
-                Buffer.from(signature),
-                Buffer.from(expectedSignature)
-            )) {
-                throw new L402Error("Invalid signature", "INVALID_SIGNATURE", 401);
-            }
-
-            if (decodedMacaroon.expiryTime < Date.now()) {
-                throw new L402Error("Macaroon expired", "MACAROON_EXPIRED", 401);
-            }
-
-            return decodedMacaroon;
-        } catch (error) {
-            if (error instanceof L402Error) throw error;
-            throw new L402Error("Invalid macaroon format", "INVALID_FORMAT", 401, error);
         }
     }
 
-    private verifyPreimage(preimage: string, paymentHash: string): void {
-        if (!preimage?.match(/^[a-f0-9]{64}$/i)) {
-            throw new L402Error("Invalid preimage format", "INVALID_PREIMAGE", 401);
+    public verify({
+        macaroon,
+        preimage
+    }: Parameters<MacaroonMinter['verify']>[0]): MacaroonVerificationResult {
+        try {
+            const decodedMacaroon = this.decodeMacaroon(macaroon);
+            
+            // Verify macaroon structure
+            this.validateMacaroonStructure(decodedMacaroon);
+
+            // Verify signature chain
+            const isValidSignature = this.verifySignatureChain(decodedMacaroon);
+            if (!isValidSignature) {
+                return {
+                    isValid: false,
+                    error: 'Invalid signature chain'
+                };
+            }
+
+            // Verify preimage
+            const isValidPreimage = this.verifyPreimage(preimage, decodedMacaroon.paymentInfo.hash);
+            if (!isValidPreimage) {
+                return {
+                    isValid: false,
+                    error: 'Invalid preimage'
+                };
+            }
+
+            // Verify expiration
+            const isExpired = new Date(decodedMacaroon.restrictions.expiresAt).getTime() < Date.now();
+            if (isExpired) {
+                return {
+                    isValid: false,
+                    error: 'Macaroon has expired'
+                };
+            }
+
+            return {
+                isValid: true,
+                data: {
+                    macaroon: decodedMacaroon,
+                    verifiedCaveats: {
+                        firstParty: decodedMacaroon.caveats,
+                        thirdParty: decodedMacaroon.thirdPartyCaveats
+                    }
+                }
+            };
+        } catch (error) {
+            return {
+                isValid: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+
+    public async revoke(paymentHash: string): Promise<void> {
+        // Implementation for revoking macaroons
+        throw new Error('Revocation not implemented');
+    }
+
+    private createIdentifier(paymentHash: string): MacaroonIdentifier {
+        return {
+            version: 1,
+            tokenId: this.config.keyId,
+            paymentHash,
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    private calculateExpiryTime(expiryTime?: number): string {
+        const timestamp = expiryTime || Date.now() + (this.config.defaultExpirySeconds * 1000);
+        return new Date(timestamp).toISOString();
+    }
+
+    private formatCapabilities(capabilities: unknown): string[] {
+        if (typeof capabilities === 'string') {
+            return capabilities.split(',').map(c => c.trim()).filter(Boolean);
+        }
+        if (Array.isArray(capabilities)) {
+            return capabilities.filter(c => typeof c === 'string');
+        }
+        return [];
+    }
+
+    private validatePaymentAmount(price: unknown): number {
+        const amount = Number(price);
+        if (isNaN(amount) || amount < 0) {
+            return 0;
+        }
+        return amount;
+    }
+
+    private validateCapabilities(capabilities: string[]): string[] {
+        if (capabilities.length === 0) {
+            return this.config.capabilities;
+        }
+        return capabilities.filter(cap => this.config.capabilities.includes(cap));
+    }
+
+    private decodeMacaroon(macaroon: string): L402Macaroon {
+        try {
+            return JSON.parse(Buffer.from(macaroon, 'base64url').toString());
+        } catch (error) {
+            throw new L402Error('Invalid macaroon format', 'INVALID_MACAROON', 400);
+        }
+    }
+
+    private validateMacaroonStructure(macaroon: L402Macaroon): void {
+        const requiredFields = ['identifier', 'location', 'caveats', 'signature'];
+        for (const field of requiredFields) {
+            if (!macaroon[field as keyof L402Macaroon]) {
+                throw new L402Error(
+                    `Missing required field: ${field}`,
+                    'INVALID_MACAROON_STRUCTURE',
+                    400
+                );
+            }
+        }
+    }
+
+    private verifySignatureChain(macaroon: L402Macaroon): boolean {
+        const builder = new DefaultMacaroonBuilder(this.config.secret)
+            .setLocation(macaroon.location)
+            .setIdentifier(JSON.parse(
+                Buffer.from(macaroon.identifier, 'base64url').toString()
+            ));
+
+        // Replay all caveats to rebuild the signature chain
+        for (const caveat of macaroon.caveats) {
+            builder.addCaveat(caveat.condition, caveat.namespace);
+        }
+
+        for (const caveat of macaroon.thirdPartyCaveats) {
+            builder.addThirdPartyCaveat(caveat);
+        }
+
+        const reconstructed = builder.build();
+        return reconstructed.signature === macaroon.signature;
+    }
+
+    private verifyPreimage(preimage: string, paymentHash: string): boolean {
+        if (!this.isValidHexString(preimage, 64)) {
+            return false;
         }
 
         const calculatedHash = crypto
             .createHash(CONSTANTS.HASH_ALGORITHM)
-            .update(Buffer.from(preimage, "hex"))
-            .digest("hex");
+            .update(Buffer.from(preimage, 'hex'))
+            .digest('hex');
 
-        if (!crypto.timingSafeEqual(
+        return crypto.timingSafeEqual(
             Buffer.from(calculatedHash),
             Buffer.from(paymentHash)
-        )) {
-            throw new L402Error("Invalid preimage", "INVALID_PREIMAGE", 401);
-        }
+        );
     }
 
-    private sign(data: VersionedMacaroonData): string {
-        const dataToSign = JSON.stringify(data);
-        const hmac = crypto.createHmac(CONSTANTS.HASH_ALGORITHM, this.config.secret);
-        hmac.update(dataToSign);
-        return hmac.digest("hex");
+    private isValidHexString(str: string, length: number): boolean {
+        return Boolean(str.match(new RegExp(`^[a-f0-9]{${length}}$`, 'i')));
     }
 }
