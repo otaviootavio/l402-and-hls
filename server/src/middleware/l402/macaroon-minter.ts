@@ -10,7 +10,6 @@ export class DefaultMacaroonMinter implements MacaroonMinter {
     mint({
         paymentHash,
         expiryTime,
-        maxUses,
         metadata
     }: Parameters<MacaroonMinter["mint"]>[0]): MacaroonMintResult {
         const macaroonData: VersionedMacaroonData = {
@@ -19,7 +18,6 @@ export class DefaultMacaroonMinter implements MacaroonMinter {
             paymentHash,
             timestamp: Date.now(),
             expiryTime: expiryTime || Date.now() + (this.config.defaultExpirySeconds * 1000),
-            maxUses: maxUses || this.config.defaultMaxUses,
             metadata: metadata as MacaroonMetadata
         };
 

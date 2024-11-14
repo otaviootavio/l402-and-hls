@@ -42,9 +42,9 @@ async function main() {
       timeoutMs: 5000,
     },
     
-    serviceName: process.env.SERVICE_NAME || "api-service",
-    defaultTier: Number(process.env.SERVICE_TIER) || 0,
-    capabilities: process.env.SERVICE_CAPABILITIES?.split(",") || ["read", "write"],
+    serviceName: CONSTANTS.SERVICE_NAME || "api-service",
+    defaultTier: Number(CONSTANTS.SERVICE_TIER) || 0,
+    capabilities: CONSTANTS.SERVICE_CAPABILITIES || ["read", "write"],
   };
 
   const invoiceService = createLightningService(lnd);

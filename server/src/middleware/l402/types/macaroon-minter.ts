@@ -4,7 +4,6 @@ export interface MacaroonMinterConfig {
   secret: string;
   keyId: string;
   defaultExpirySeconds: number;
-  defaultMaxUses: number;
 }
 
 export interface MacaroonMintResult {
@@ -21,7 +20,6 @@ export interface MacaroonMinter {
   mint(params: {
     paymentHash: string;
     expiryTime?: number;
-    maxUses?: number;
     metadata?: Record<string, unknown>;
   }): MacaroonMintResult;
 

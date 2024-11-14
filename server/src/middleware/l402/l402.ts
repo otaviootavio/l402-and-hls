@@ -6,8 +6,6 @@ import type {
 import crypto from "crypto";
 
 import { CONSTANTS } from "../../config/contants";
-import { MemoryL402Storage } from "./memory";
-import type { L402Storage } from "./types/storage";
 import type { L402Logger } from "./types/logger";
 import type { L402Config } from "./types/config";
 import type { L402Token } from "./types/token";
@@ -36,7 +34,6 @@ export interface InvoiceService {
 
 
 export class L402Middleware {
-  private readonly storage: L402Storage;
   private readonly logger: L402Logger;
   private readonly config: Required<L402Config>;
   private readonly macaroonMinter: MacaroonMinter
@@ -46,12 +43,10 @@ export class L402Middleware {
   constructor(
     config: L402Config,
     invoiceService: InvoiceService,
-    storage?: L402Storage,
     logger?: L402Logger
   ) {
     this.validateConfig(config);
     this.config = this.getDefaultConfig(config);
-    this.storage = storage || new MemoryL402Storage();
     this.logger = logger || new ConsoleL402Logger();
     this.invoiceService = invoiceService;
 
@@ -59,7 +54,6 @@ export class L402Middleware {
       secret: this.config.secret,
       keyId: this.config.keyId,
       defaultExpirySeconds: this.config.timeoutSeconds,
-      defaultMaxUses: this.config.maxTokenUses
     });
 
     this.macaroonAuthorizer = new DefaultMacaroonAuthorizer({
@@ -167,19 +161,6 @@ export class L402Middleware {
     }
   }
 
-  private async validateTokenUsage(token: L402Token): Promise<void> {
-    if (await this.storage.isTokenRevoked(token.paymentHash)) {
-      throw new L402Error("Token has been revoked", "TOKEN_REVOKED", 401);
-    }
-
-    const usageCount = await this.storage.incrementTokenUsage(
-      token.paymentHash
-    );
-    if (usageCount > token.maxUses) {
-      await this.storage.revokeToken(token.paymentHash);
-      throw new L402Error("Token usage limit exceeded", "TOKEN_EXPIRED", 401);
-    }
-  }
 
   private async createChallenge(): Promise<{
     macaroon: string;
@@ -201,7 +182,6 @@ export class L402Middleware {
       const { macaroon } = this.macaroonMinter.mint({
         paymentHash: createdInvoice.id,
         expiryTime: Date.now() + this.config.timeoutSeconds * 1000,
-        maxUses: this.config.maxTokenUses,
         metadata: {
           price: this.config.priceSats,
           description: this.config.description,
@@ -340,7 +320,6 @@ export class L402Middleware {
         keyId: macaroonData.keyId,
         version: macaroonData.version,
         usageCount: 0,
-        maxUses: macaroonData.maxUses,
       };
 
       const isPaid = await this.verifyLightningPayment(macaroonData.paymentHash);
@@ -351,8 +330,6 @@ export class L402Middleware {
           401
         );
       }
-
-      await this.validateTokenUsage(token);
 
       req.l402Token = token; 
 
@@ -368,25 +345,4 @@ export class L402Middleware {
       this.handleError(error, res);
     }
   };
-
-  public async revokeToken(paymentHash: string): Promise<void> {
-    try {
-      await this.storage.revokeToken(paymentHash);
-      this.logger.info("TOKEN_REVOKED", "Token revoked successfully", {
-        paymentHash,
-      });
-    } catch (error) {
-      this.logger.error("REVOCATION_FAILED", "Failed to revoke token", {
-        error,
-        paymentHash,
-      });
-      throw new L402Error(
-        "Failed to revoke token",
-        "REVOCATION_FAILED",
-        500,
-        error
-      );
-    }
-  }
-
 }

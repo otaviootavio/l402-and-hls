@@ -6,7 +6,6 @@ export interface L402Token {
   readonly keyId: string;
   readonly version: number;
   readonly usageCount: number;
-  readonly maxUses: number;
 }
 
 export interface MacaroonMetadata {
@@ -21,7 +20,6 @@ export interface VersionedMacaroonData {
   readonly paymentHash: string;
   readonly timestamp: number;
   readonly expiryTime: number;
-  readonly maxUses: number;
   readonly metadata?: MacaroonMetadata;
 }
 
