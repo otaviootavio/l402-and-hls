@@ -3,7 +3,7 @@ import type { RetryService } from "./retry";
 import { L402Error } from "../middleware/l402/L402Error";
 import type { L402Logger } from "../middleware/l402/logger";
 
-export class LightningService {
+export class LNDService {
   constructor(
     private readonly lnd: AuthenticatedLnd,
     private readonly retryService: RetryService,

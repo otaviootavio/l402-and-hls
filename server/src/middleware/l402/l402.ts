@@ -4,7 +4,6 @@ import type {
   NextFunction,
 } from "express";
 import crypto from "crypto";
-import { createInvoice, getInvoice, type AuthenticatedLnd } from "lightning";
 
 import { CONSTANTS } from "../../config/contants";
 import { MemoryL402Storage } from "./memory";
@@ -17,19 +16,32 @@ import { ConsoleL402Logger } from "./console";
 import { MacaroonService } from "./macaroons";
 import { RetryService } from "./retry";
 
-interface Request extends ExpressRequest {
+export interface Request extends ExpressRequest {
   l402Token?: L402Token;
 }
+
+export interface Invoice {
+  id: string;
+  request: string;
+  is_confirmed: boolean;
+}
+
+export interface InvoiceService {
+  createInvoice: (params: { tokens: number; description: string }) => Promise<Invoice>;
+  getInvoice: (params: { id: string }) => Promise<Invoice>;
+}
+
 
 export class L402Middleware {
   private readonly storage: L402Storage;
   private readonly logger: L402Logger;
   private readonly config: Required<L402Config>;
   private readonly macaroonService: MacaroonService;
+  private readonly invoiceService: InvoiceService;
 
   constructor(
     config: L402Config,
-    private readonly lnd: AuthenticatedLnd,
+    invoiceService: InvoiceService,
     storage?: L402Storage,
     logger?: L402Logger
   ) {
@@ -38,6 +50,7 @@ export class L402Middleware {
     this.storage = storage || new MemoryL402Storage();
     this.logger = logger || new ConsoleL402Logger();
     this.macaroonService = new MacaroonService(this.config.secret);
+    this.invoiceService = invoiceService;
   }
 
   private validateConfig(config: L402Config): void {
@@ -125,24 +138,16 @@ export class L402Middleware {
   private async verifyLightningPayment(paymentHash: string): Promise<boolean> {
     try {
       const invoice = await RetryService.retryOperation(
-        () =>
-          getInvoice({
-            lnd: this.lnd,
-            id: paymentHash,
-          }),
+        () => this.invoiceService.getInvoice({ id: paymentHash }),
         this.config.retryConfig
       );
 
       return invoice.is_confirmed;
     } catch (error) {
-      this.logger.error(
-        "PAYMENT_VERIFICATION_FAILED",
-        "Failed to verify payment",
-        {
-          error,
-          paymentHash,
-        }
-      );
+      this.logger.error("PAYMENT_VERIFICATION_FAILED", "Failed to verify payment", {
+        error,
+        paymentHash,
+      });
       throw new L402Error(
         "Failed to verify payment",
         "PAYMENT_VERIFICATION_FAILED",
@@ -174,8 +179,7 @@ export class L402Middleware {
     try {
       const createdInvoice = await RetryService.retryOperation(
         () =>
-          createInvoice({
-            lnd: this.lnd,
+          this.invoiceService.createInvoice({
             tokens: this.config.priceSats,
             description: this.config.description,
           }),
@@ -201,13 +205,9 @@ export class L402Middleware {
         paymentHash,
       };
     } catch (error) {
-      this.logger.error(
-        "CHALLENGE_CREATION_FAILED",
-        "Failed to create challenge",
-        {
-          error,
-        }
-      );
+      this.logger.error("CHALLENGE_CREATION_FAILED", "Failed to create challenge", {
+        error,
+      });
       throw new L402Error(
         "Failed to create challenge",
         "CHALLENGE_CREATION_FAILED",
@@ -370,35 +370,4 @@ export class L402Middleware {
     }
   }
 
-  public async healthCheck(): Promise<{
-    status: "healthy" | "unhealthy";
-    lndConnected: boolean;
-  }> {
-    try {
-      await RetryService.retryOperation(
-        () =>
-          getInvoice({
-            lnd: this.lnd,
-            id: "dummy-id",
-          }),
-        {
-          ...this.config.retryConfig,
-          maxRetries: 1,
-        }
-      ).catch(() => {
-        // Ignore error, we just want to test connection
-      });
-
-      return {
-        status: "healthy",
-        lndConnected: true,
-      };
-    } catch (error) {
-      this.logger.warn("HEALTH_CHECK_FAILED", "Health check failed", { error });
-      return {
-        status: "unhealthy",
-        lndConnected: false,
-      };
-    }
-  }
 }

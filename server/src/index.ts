@@ -11,10 +11,12 @@ import { ProxyService } from "./services/proxy";
 import { HLSController } from "./controllers/hls-controller";
 
 import { createRateLimiter } from "./middleware/rate-limiter";
-import { L402Middleware } from "./middleware/l402/l402";
+import { L402Middleware, type Invoice, type InvoiceService } from "./middleware/l402/l402";
 import { CONSTANTS } from "./config/contants";
 
-import { authenticatedLndGrpc } from "lightning";
+import { authenticatedLndGrpc, createInvoice, getInvoice, type AuthenticatedLnd } from "lightning";
+import type { L402Config } from "./middleware/l402/types/config";
+import { createLightningService } from "./middleware/l402/utils";
 
 // Load environment variables
 dotenv.config();
@@ -26,27 +28,30 @@ async function main() {
     macaroon: process.env.LND_MACAROON,
     cert: process.env.LND_CERT,
   });
+
+  const config : L402Config = {
+    secret: process.env.L402_SECRET!,
+    priceSats: CONSTANTS.MIN_PRICE_SATS || 1000,
+    timeoutSeconds: CONSTANTS.MAX_TIMEOUT_SECONDS || 3600,
+    description: "API Access Token",
+    keyId: process.env.L402_KEY_ID ?? "default",
+    maxTokenUses: 1000,
+    retryConfig: {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      timeoutMs: 5000,
+    }
+  }
+  
+
+  const invoiceService = createLightningService(lnd);
+  // const storage : L402Storage = {}
+  // const logger : L402Logger = {}
+
+
   // Create L402 middleware
-  const l402 = new L402Middleware(
-    {
-      secret: process.env.L402_SECRET!,
-      priceSats: CONSTANTS.MIN_PRICE_SATS || 1000,
-      timeoutSeconds: CONSTANTS.MAX_TIMEOUT_SECONDS || 3600,
-      description: "API Access Token",
-      keyId: process.env.L402_KEY_ID ?? "default",
-      maxTokenUses: 1000,
-      retryConfig: {
-        maxRetries: 3,
-        baseDelayMs: 1000,
-        timeoutMs: 5000,
-      },
-      rateLimitConfig: {
-        windowMs: 60000,
-        maxRequests: 100,
-      },
-    },
-    lnd
-  );
+  const l402 = new L402Middleware(config, invoiceService)
+
 
   // Initialize dependencies
   const cache = new MemoryCache(proxyConfig);
