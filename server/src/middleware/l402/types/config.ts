@@ -12,10 +12,6 @@ export interface L402Config {
     baseDelayMs: number;
     timeoutMs: number;
   };
-  rateLimitConfig?: {
-    windowMs: number;
-    maxRequests: number;
-  };
   serviceName: string;
   defaultTier: number;
   capabilities: string[];
@@ -24,9 +20,4 @@ export interface RetryConfig {
   readonly maxRetries: number;
   readonly baseDelayMs: number;
   readonly timeoutMs: number;
-}
-
-export interface RateLimitConfig {
-  readonly windowMs: number;
-  readonly maxRequests: number;
 }

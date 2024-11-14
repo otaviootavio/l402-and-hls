@@ -45,11 +45,6 @@ async function main() {
     serviceName: process.env.SERVICE_NAME || "api-service",
     defaultTier: Number(process.env.SERVICE_TIER) || 0,
     capabilities: process.env.SERVICE_CAPABILITIES?.split(",") || ["read", "write"],
-
-    rateLimitConfig: {
-      windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
-      maxRequests: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-    },
   };
 
   const invoiceService = createLightningService(lnd);

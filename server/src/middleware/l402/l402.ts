@@ -127,11 +127,7 @@ export class L402Middleware {
         maxRetries: 3,
         baseDelayMs: 1000,
         timeoutMs: 5000,
-      },
-      rateLimitConfig: {
-        windowMs: 60000,
-        maxRequests: 100,
-      },
+      }
     };
 
     return {
@@ -140,10 +136,6 @@ export class L402Middleware {
       retryConfig: {
         ...defaults.retryConfig,
         ...config.retryConfig,
-      },
-      rateLimitConfig: {
-        ...defaults.rateLimitConfig,
-        ...config.rateLimitConfig,
       },
       description: config.description || defaults.description,
       keyId: config.keyId || defaults.keyId,
