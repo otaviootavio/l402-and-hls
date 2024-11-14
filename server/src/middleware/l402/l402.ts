@@ -13,8 +13,11 @@ import type { L402Config } from "./types/config";
 import type { L402Token } from "./types/token";
 import { L402Error } from "./L402Error";
 import { ConsoleL402Logger } from "./console";
-import { MacaroonService } from "./macaroons";
 import { RetryService } from "./retry";
+import type { MacaroonMinter } from "./types/macaroon-minter";
+import type { MacaroonAuthorizer } from "./types/macaroon-authorizer";
+import { DefaultMacaroonMinter } from "./macaroon-minter";
+import { DefaultMacaroonAuthorizer } from "./macaroon-authorizer";
 
 export interface Request extends ExpressRequest {
   l402Token?: L402Token;
@@ -36,7 +39,8 @@ export class L402Middleware {
   private readonly storage: L402Storage;
   private readonly logger: L402Logger;
   private readonly config: Required<L402Config>;
-  private readonly macaroonService: MacaroonService;
+  private readonly macaroonMinter: MacaroonMinter
+  private readonly macaroonAuthorizer: MacaroonAuthorizer
   private readonly invoiceService: InvoiceService;
 
   constructor(
@@ -49,8 +53,21 @@ export class L402Middleware {
     this.config = this.getDefaultConfig(config);
     this.storage = storage || new MemoryL402Storage();
     this.logger = logger || new ConsoleL402Logger();
-    this.macaroonService = new MacaroonService(this.config.secret);
     this.invoiceService = invoiceService;
+
+    this.macaroonMinter = new DefaultMacaroonMinter({
+      secret: this.config.secret,
+      keyId: this.config.keyId,
+      defaultExpirySeconds: this.config.timeoutSeconds,
+      defaultMaxUses: this.config.maxTokenUses
+    });
+
+    this.macaroonAuthorizer = new DefaultMacaroonAuthorizer({
+      serviceName: this.config.serviceName,
+      defaultTier: this.config.defaultTier,
+      capabilities: this.config.capabilities
+    });
+
   }
 
   private validateConfig(config: L402Config): void {
@@ -73,6 +90,27 @@ export class L402Middleware {
     ) {
       throw new L402Error(
         "Invalid timeout configuration",
+        "INVALID_CONFIG",
+        500
+      );
+    }
+    if (!config.serviceName) {
+      throw new L402Error(
+        "Service name is required",
+        "INVALID_CONFIG",
+        500
+      );
+    }
+    if (typeof config.defaultTier !== "number") {
+      throw new L402Error(
+        "Default tier is required",
+        "INVALID_CONFIG",
+        500
+      );
+    }
+    if (!Array.isArray(config.capabilities)) {
+      throw new L402Error(
+        "Capabilities must be an array",
         "INVALID_CONFIG",
         500
       );
@@ -113,26 +151,6 @@ export class L402Middleware {
         config.keyRotationIntervalHours || defaults.keyRotationIntervalHours,
       maxTokenUses: config.maxTokenUses || defaults.maxTokenUses,
     };
-  }
-
-  private validatePreimage(preimage: string, paymentHash: string): void {
-    if (!preimage?.match(/^[a-f0-9]{64}$/i)) {
-      throw new L402Error("Invalid preimage format", "INVALID_PREIMAGE", 401);
-    }
-
-    const calculatedHash = crypto
-      .createHash(CONSTANTS.HASH_ALGORITHM)
-      .update(Buffer.from(preimage, "hex"))
-      .digest("hex");
-
-    if (
-      !crypto.timingSafeEqual(
-        Buffer.from(calculatedHash),
-        Buffer.from(paymentHash)
-      )
-    ) {
-      throw new L402Error("Invalid preimage", "INVALID_PREIMAGE", 401);
-    }
   }
 
   private async verifyLightningPayment(paymentHash: string): Promise<boolean> {
@@ -177,6 +195,7 @@ export class L402Middleware {
     paymentHash: string;
   }> {
     try {
+      // Criar invoice com retry
       const createdInvoice = await RetryService.retryOperation(
         () =>
           this.invoiceService.createInvoice({
@@ -186,23 +205,24 @@ export class L402Middleware {
         this.config.retryConfig
       );
 
-      const paymentHash = createdInvoice.id;
-      const expiryTime = Date.now() + this.config.timeoutSeconds * 1000;
-      const macaroon = this.macaroonService.create(
-        paymentHash,
-        expiryTime,
-        this.config.keyId,
-        this.config.maxTokenUses,
-        {
+      // Criar macaroon usando o novo minter
+      const { macaroon } = this.macaroonMinter.mint({
+        paymentHash: createdInvoice.id,
+        expiryTime: Date.now() + this.config.timeoutSeconds * 1000,
+        maxUses: this.config.maxTokenUses,
+        metadata: {
           price: this.config.priceSats,
           description: this.config.description,
+          // Adicionar dados necessários para autorização
+          services: `${this.config.serviceName}:${this.config.defaultTier}`,
+          [`${this.config.serviceName}_capabilities`]: this.config.capabilities.join(",")
         }
-      );
+      });
 
       return {
         macaroon,
         invoice: createdInvoice.request,
-        paymentHash,
+        paymentHash: createdInvoice.id,
       };
     } catch (error) {
       this.logger.error("CHALLENGE_CREATION_FAILED", "Failed to create challenge", {
@@ -261,6 +281,7 @@ export class L402Middleware {
     try {
       const authHeader = req.headers.authorization;
 
+      // Verificar se precisa criar um novo challenge
       if (!authHeader?.startsWith(CONSTANTS.AUTH_SCHEME)) {
         const challenge = await this.createChallenge();
         res.setHeader(
@@ -276,6 +297,7 @@ export class L402Middleware {
         return;
       }
 
+      // Extrair macaroon e preimage
       const tokenPart = authHeader.slice(CONSTANTS.AUTH_SCHEME.length + 1);
       const [macaroon, preimage] = tokenPart.split(CONSTANTS.TOKEN_SEPARATOR);
 
@@ -287,8 +309,36 @@ export class L402Middleware {
         );
       }
 
-      const macaroonData = this.macaroonService.verify(macaroon);
-      this.validatePreimage(preimage, macaroonData.paymentHash);
+      // Verificar macaroon usando o minter
+      const { isValid, data: macaroonData } = this.macaroonMinter.verify({
+        macaroon,
+        preimage
+      });
+
+      if (!isValid || !macaroonData) {
+        throw new L402Error(
+          "Invalid macaroon",
+          "INVALID_TOKEN",
+          401
+        );
+      }
+
+      // Verificar autorização usando o authorizer
+      const isAuthorized = await this.macaroonAuthorizer.authorize({
+        macaroonData,
+        context: {
+          service: this.config.serviceName,
+          metadata: req.body
+        }
+      });
+
+      if (!isAuthorized) {
+        throw new L402Error(
+          "Unauthorized",
+          "UNAUTHORIZED",
+          401
+        );
+      }
 
       const token: L402Token = {
         macaroon,
@@ -301,7 +351,7 @@ export class L402Middleware {
         maxUses: macaroonData.maxUses,
       };
 
-      const isPaid = await this.verifyLightningPayment(token.paymentHash);
+      const isPaid = await this.verifyLightningPayment(macaroonData.paymentHash);
       if (!isPaid) {
         throw new L402Error(
           "Payment not confirmed",
@@ -311,15 +361,17 @@ export class L402Middleware {
       }
 
       await this.validateTokenUsage(token);
-      req.l402Token = token;
+
+      req.l402Token = token; 
 
       this.logger.info("AUTH_SUCCESS", "Authentication successful", {
-        paymentHash: token.paymentHash,
-        keyId: token.keyId,
-        timeUntilExpire: token.expiry,
+        paymentHash: macaroonData.paymentHash,
+        keyId: macaroonData.keyId,
+        timeUntilExpire: macaroonData.expiryTime,
       });
 
       next();
+
     } catch (error) {
       this.handleError(error, res);
     }
@@ -339,31 +391,6 @@ export class L402Middleware {
       throw new L402Error(
         "Failed to revoke token",
         "REVOCATION_FAILED",
-        500,
-        error
-      );
-    }
-  }
-
-  public async getTokenInfo(paymentHash: string): Promise<{
-    usageCount: number;
-    isRevoked: boolean;
-  }> {
-    try {
-      const [usageCount, isRevoked] = await Promise.all([
-        this.storage.getTokenUsage(paymentHash),
-        this.storage.isTokenRevoked(paymentHash),
-      ]);
-
-      return { usageCount, isRevoked };
-    } catch (error) {
-      this.logger.error("TOKEN_INFO_FAILED", "Failed to get token info", {
-        error,
-        paymentHash,
-      });
-      throw new L402Error(
-        "Failed to get token info",
-        "TOKEN_INFO_FAILED",
         500,
         error
       );

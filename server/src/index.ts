@@ -29,7 +29,7 @@ async function main() {
     cert: process.env.LND_CERT,
   });
 
-  const config : L402Config = {
+  const config: L402Config = {
     secret: process.env.L402_SECRET!,
     priceSats: CONSTANTS.MIN_PRICE_SATS || 1000,
     timeoutSeconds: CONSTANTS.MAX_TIMEOUT_SECONDS || 3600,
@@ -40,17 +40,29 @@ async function main() {
       maxRetries: 3,
       baseDelayMs: 1000,
       timeoutMs: 5000,
-    }
-  }
-  
+    },
+    
+    serviceName: process.env.SERVICE_NAME || "api-service",
+    defaultTier: Number(process.env.SERVICE_TIER) || 0,
+    capabilities: process.env.SERVICE_CAPABILITIES?.split(",") || ["read", "write"],
+
+    rateLimitConfig: {
+      windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
+      maxRequests: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+    },
+  };
 
   const invoiceService = createLightningService(lnd);
   // const storage : L402Storage = {}
   // const logger : L402Logger = {}
 
-
   // Create L402 middleware
-  const l402 = new L402Middleware(config, invoiceService)
+  const l402 = new L402Middleware(
+    config,
+    invoiceService
+    // storage,  // Optional: custom storage implementation
+    // logger,   // Optional: custom logger implementation
+  );
 
 
   // Initialize dependencies
