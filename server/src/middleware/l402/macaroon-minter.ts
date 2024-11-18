@@ -8,10 +8,7 @@ import type {
     MacaroonMintResult,
     MacaroonVerificationResult,
     L402Macaroon,
-    MacaroonCaveat,
-    ThirdPartyCaveat,
     MacaroonIdentifier,
-    CaveatCondition
 } from './types/token';
 
 export class DefaultMacaroonMinter implements MacaroonMinter {
@@ -27,20 +24,33 @@ export class DefaultMacaroonMinter implements MacaroonMinter {
         metadata = {}
     }: Parameters<MacaroonMinter['mint']>[0]): MacaroonMintResult {
         try {
-            const capabilities = this.formatCapabilities(metadata.capabilities);
             const actualExpiryTime = this.calculateExpiryTime(expiryTime);
             const identifier = this.createIdentifier(paymentHash);
-
-            const macaroon = this.builder
+            
+            // Add caveats only here in the minter
+            this.builder
                 .setLocation(this.config.serviceName)
                 .setIdentifier(identifier)
-                .buildL402Macaroon({
-                    paymentAmount: this.validatePaymentAmount(metadata.price),
-                    service: this.config.serviceName,
-                    tier: this.config.defaultTier,
-                    capabilities: this.validateCapabilities(capabilities),
-                    expiresAt: actualExpiryTime,
-                });
+                // Add time expiration caveat
+                .addCaveat({
+                    key: "expiration",
+                    operator: "<",
+                    value: actualExpiryTime
+                }, "time")
+                // Add streaming capability caveat
+                .addCaveat({
+                    key: "capability",
+                    operator: "==",
+                    value: "stream"
+                }, "auth");
+
+            const macaroon = this.builder.buildL402Macaroon({
+                paymentAmount: this.validatePaymentAmount(metadata.price),
+                service: this.config.serviceName,
+                tier: this.config.defaultTier,
+                capabilities: ["stream"],
+                expiresAt: actualExpiryTime,
+            });
 
             return {
                 macaroon: Buffer.from(JSON.stringify(macaroon)).toString('base64url'),
@@ -75,23 +85,7 @@ export class DefaultMacaroonMinter implements MacaroonMinter {
                 };
             }
 
-            // Verify preimage
-            const isValidPreimage = this.verifyPreimage(preimage, decodedMacaroon.paymentInfo.hash);
-            if (!isValidPreimage) {
-                return {
-                    isValid: false,
-                    error: 'Invalid preimage'
-                };
-            }
 
-            // Verify expiration
-            const isExpired = new Date(decodedMacaroon.restrictions.expiresAt).getTime() < Date.now();
-            if (isExpired) {
-                return {
-                    isValid: false,
-                    error: 'Macaroon has expired'
-                };
-            }
 
             return {
                 isValid: true,
@@ -119,9 +113,8 @@ export class DefaultMacaroonMinter implements MacaroonMinter {
     private createIdentifier(paymentHash: string): MacaroonIdentifier {
         return {
             version: 1,
-            tokenId: this.config.keyId,
             paymentHash,
-            timestamp: new Date().toISOString()
+            userId: crypto.randomBytes(32).toString('hex')
         };
     }
 

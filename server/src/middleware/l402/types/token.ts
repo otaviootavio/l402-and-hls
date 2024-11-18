@@ -3,9 +3,8 @@
 // Base Macaroon Types
 export interface MacaroonIdentifier {
   version: number;
-  tokenId: string;
   paymentHash: string;
-  timestamp: string; // ISO 8601
+  userId: string;
 }
 
 export type CaveatOperator = '<' | '>' | '==' | '<=' | '>=' | '!=';
@@ -43,18 +42,8 @@ export interface L402PaymentInfo {
   timestamp: string; // ISO 8601
 }
 
-export interface L402Restrictions {
-  expiresAt: string;    // ISO 8601
-  maxUses?: number;
-  service: string;
-  tier: number;
-  capabilities: string[];
-}
 
-export interface L402Macaroon extends Macaroon {
-  paymentInfo: L402PaymentInfo;
-  restrictions: L402Restrictions;
-}
+export interface L402Macaroon extends Macaroon {}
 
 // Minting Types
 export interface MacaroonMinterConfig {
@@ -81,6 +70,26 @@ export interface MacaroonVerificationResult {
       thirdParty: ThirdPartyCaveat[];
     };
   };
+}
+
+export interface MacaroonMintParams {
+  paymentHash: string;
+  expiryTime?: number;
+  metadata?: Record<string, unknown> & {
+      capabilities?: string | string[];
+      price?: number;
+  };
+}
+
+export interface MacaroonMinter {
+  mint(params: MacaroonMintParams): MacaroonMintResult;
+  verify(params: { macaroon: string; preimage: string }): MacaroonVerificationResult;
+  revoke(paymentHash: string): Promise<void>;
+}
+
+export interface MintMetadata extends Record<string, unknown> {
+  capabilities?: string | string[];
+  price?: number;
 }
 
 // Authorization Types

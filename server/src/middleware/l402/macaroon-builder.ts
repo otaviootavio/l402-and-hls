@@ -64,11 +64,10 @@ export class DefaultMacaroonBuilder implements MacaroonBuilder {
   }
 
   public addCaveat(condition: CaveatCondition, namespace?: string): this {
-    const caveatStr = JSON.stringify({ ...condition, namespace });
     const caveat: MacaroonCaveat = {
-      condition,
-      namespace,
-      signature: this.signCaveat(caveatStr)
+        condition,
+        namespace,
+        signature: this.signCaveat(JSON.stringify({ ...condition, namespace }))
     };
     
     this.macaroon.caveats!.push(caveat);
@@ -122,60 +121,16 @@ export class DefaultMacaroonBuilder implements MacaroonBuilder {
   }
 
   public buildL402Macaroon(params: L402BuildParams): L402Macaroon {
-    // Reset caveats
-    this.macaroon.caveats = [];
-    this.macaroon.thirdPartyCaveats = [];
-
-    // Add L402-specific caveats
-    this.addCaveat({
-      key: 'expiration',
-      operator: '<',
-      value: params.expiresAt
-    }, 'time');
-
-    if (params.capabilities.length > 0) {
-      this.addCaveat({
-        key: 'service-capability',
-        operator: '==',
-        value: params.service
-      }, 'auth');
-
-      params.capabilities.forEach(cap => {
-        this.addCaveat({
-          key: 'capability',
-          operator: '==',
-          value: cap
-        }, 'auth');
-      });
-    }
-
-    if (params.maxUses) {
-      this.addCaveat({
-        key: 'request-limit',
-        operator: '<',
-        value: params.maxUses
-      }, 'usage');
-    }
-
     const baseMacaroon = this.build();
-    const identifierData: MacaroonIdentifier = JSON.parse(
-      Buffer.from(baseMacaroon.identifier, 'base64url').toString()
+    
+    // Decode the identifier from base64
+    const identifier = JSON.parse(
+        Buffer.from(baseMacaroon.identifier, 'base64url').toString()
     );
-
+    
     return {
-      ...baseMacaroon,
-      paymentInfo: {
-        hash: identifierData.paymentHash,
-        amount: params.paymentAmount,
-        timestamp: identifierData.timestamp
-      },
-      restrictions: {
-        expiresAt: params.expiresAt,
-        maxUses: params.maxUses,
-        service: params.service,
-        tier: params.tier,
-        capabilities: params.capabilities
-      }
+        ...baseMacaroon,
     };
   }
+
 }
