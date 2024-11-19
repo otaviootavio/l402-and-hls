@@ -33,7 +33,7 @@ async function main() {
   // Configuration
   const config: LNAPConfig = {
     invoiceExpiryMinutes: 10,
-    tokenExpiryMinutes: 60,
+    tokenExpiryMinutes: 1,
     requiredPaymentAmount: 1000,
     hmacSecret: process.env.HMAC_SECRET || "your-secret-key",
   };
