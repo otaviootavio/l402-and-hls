@@ -1,9 +1,7 @@
-// middleware/lnap/index.ts
 import type { Request, Response, NextFunction } from 'express';
 import type { ILightningService } from './interfaces';
 import type { ITokenService } from './interfaces';
 import type { LNAPConfig, PaymentVerification, TokenMetadata } from './types';
-
 
 export class LNAPMiddleware {
   constructor(
@@ -12,7 +10,7 @@ export class LNAPMiddleware {
     private readonly config: LNAPConfig
   ) {}
 
-  initAuth = async (request: Request<any>, response: Response): Promise<void> => {
+  initAuth = async (request: Request, response: Response): Promise<void> => {
     try {
       const invoice = await this.lightningService.generateInvoice(
         this.config.requiredPaymentAmount,
@@ -20,60 +18,78 @@ export class LNAPMiddleware {
       );
       response.status(200).json(invoice);
     } catch (error) {
+      console.error('Failed to generate invoice:', error);
       response.status(500).json({ error: 'Failed to generate invoice' });
     }
   };
 
-  verifyAuth = async (request: Request<any>, response: Response): Promise<void> => {
+  verifyAuth = async (request: Request, response: Response): Promise<void> => {
     try {
-      const body = request.body as unknown as PaymentVerification;
+      const body = request.body as PaymentVerification;
       
-      if (!body || !body.paymentHash || !body.paymentPreimage) {
+      if (!body?.paymentHash || !body?.paymentPreimage) {
         response.status(400).json({ error: 'Invalid verification data' });
         return;
       }
 
-      const verification: PaymentVerification = {
-        paymentHash: body.paymentHash,
-        paymentPreimage: body.paymentPreimage
-      };
-
-      const isValid = await this.lightningService.verifyPayment(verification);
+      const isValid = await this.lightningService.verifyPayment(body);
 
       if (!isValid) {
         response.status(400).json({ error: 'Invalid payment verification' });
         return;
       }
 
+      const now = Math.floor(Date.now() / 1000);
       const metadata: TokenMetadata = {
         amountPaid: this.config.requiredPaymentAmount,
-        issuedAt: Math.floor(Date.now() / 1000),
-        expiresAt: Math.floor(Date.now() / 1000) + (this.config.tokenExpiryMinutes * 60),
-        paymentHash: verification.paymentHash
+        issuedAt: now,
+        expiresAt: now + (this.config.tokenExpiryMinutes * 60),
+        paymentHash: body.paymentHash
       };
 
       const token = this.tokenService.generateToken(metadata);
+      
+      console.log('Generated token with metadata:', {
+        ...metadata,
+        tokenExpiryMinutes: this.config.tokenExpiryMinutes,
+        currentTime: now,
+        expiresIn: metadata.expiresAt - now
+      });
+
       response.status(200).json({ token, metadata });
     } catch (error) {
+      console.error('Failed to verify payment:', error);
       response.status(500).json({ error: 'Failed to verify payment' });
     }
   };
 
-  protect = async (request: Request<any>, response: Response, next: NextFunction): Promise<void> => {
-    const authHeader = request.headers['authorization'];
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      response.status(401).json({ error: 'No token provided' });
-      return;
-    }
+  protect = async (request: Request, response: Response, next: NextFunction): Promise<void> => {
+    try {
+      const authHeader = request.headers['authorization'];
+      
+      if (!authHeader?.startsWith('Bearer ')) {
+        response.status(401).json({ error: 'No token provided' });
+        return;
+      }
 
-    const token = authHeader.split(' ')[1];
-    
-    if (!this.tokenService.verifyToken(token)) {
+      const token = authHeader.split(' ')[1];
+      const now = Math.floor(Date.now() / 1000);
+      
+      // Check if token is valid
+      if (!this.tokenService.verifyToken(token)) {
+        console.log('Token verification failed:', {
+          token,
+          currentTime: now,
+        });
+        
+        response.status(401).json({ error: 'Token expired or invalid' });
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error('Token verification error:', error);
       response.status(401).json({ error: 'Invalid token' });
-      return;
     }
-
-    next();
   };
 }
