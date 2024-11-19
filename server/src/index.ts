@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import cors from "cors";
 import compression from "compression";
 import dotenv from "dotenv";
@@ -11,12 +11,13 @@ import { ProxyService } from "./services/proxy";
 import { HLSController } from "./controllers/hls-controller";
 
 import { createRateLimiter } from "./middleware/rate-limiter";
-import { L402Middleware, type Invoice, type InvoiceService } from "./middleware/l402/l402";
-import { CONSTANTS } from "./config/contants";
 
-import { authenticatedLndGrpc, createInvoice, getInvoice, type AuthenticatedLnd } from "lightning";
-import type { L402Config } from "./middleware/l402/types/config";
-import { createLightningService } from "./middleware/l402/utils";
+import { authenticatedLndGrpc, type AuthenticatedLnd } from "lightning";
+import type { ILightningService } from "./middleware/lnap/interfaces";
+import { LightningService } from "./middleware/lnap/LightningService";
+import type { LNAPConfig } from "./middleware/lnap/types";
+import { TokenService } from "./middleware/lnap/TokenService";
+import { LNAPMiddleware } from "./middleware/lnap";
 
 // Load environment variables
 dotenv.config();
@@ -29,36 +30,20 @@ async function main() {
     cert: process.env.LND_CERT,
   });
 
-  const config: L402Config = {
-    secret: process.env.L402_SECRET!,
-    priceSats: CONSTANTS.MIN_PRICE_SATS || 1000,
-    timeoutSeconds: CONSTANTS.MAX_TIMEOUT_SECONDS || 3600,
-    description: "API Access Token",
-    keyId: process.env.L402_KEY_ID ?? "default",
-    maxTokenUses: 1000,
-    retryConfig: {
-      maxRetries: 3,
-      baseDelayMs: 1000,
-      timeoutMs: 5000,
-    },
-    
-    serviceName: CONSTANTS.SERVICE_NAME || "api-service",
-    defaultTier: Number(CONSTANTS.SERVICE_TIER) || 0,
-    capabilities: CONSTANTS.SERVICE_CAPABILITIES || ["read", "write"],
+  // Configuration
+  const config: LNAPConfig = {
+    invoiceExpiryMinutes: 10,
+    tokenExpiryMinutes: 60,
+    requiredPaymentAmount: 1000,
+    hmacSecret: process.env.HMAC_SECRET || "your-secret-key",
   };
 
-  const invoiceService = createLightningService(lnd);
-  // const storage : L402Storage = {}
-  // const logger : L402Logger = {}
+  const tokenService = new TokenService(config.hmacSecret);
 
-  // Create L402 middleware
-  const l402 = new L402Middleware(
-    config,
-    invoiceService
-    // storage,  // Optional: custom storage implementation
-    // logger,   // Optional: custom logger implementation
-  );
+  // Initialize LNAP middleware
+  const lightningService = new LightningService(lnd);
 
+  const lnap = new LNAPMiddleware(lightningService, tokenService, config);
 
   // Initialize dependencies
   const cache = new MemoryCache(proxyConfig);
@@ -93,8 +78,17 @@ async function main() {
   app.use(createRateLimiter());
 
   // Routes
-  app.get("/test/pay", l402.authorize, hlsController.handleHealthCheck);
-  app.get("/hls/*", l402.authorize, hlsController.handleHLSRequest);
+  app.get("/auth/init", (req, res) => lnap.initAuth(req, res));
+  app.post("/auth/verify", (req, res) => lnap.verifyAuth(req, res));
+  app.get(
+    "/api/protected",
+    (req, res, next) => lnap.protect(req, res, next),
+    (req, res) => {
+      res.json({ message: "Access granted to protected resource" });
+    }
+  );
+
+  app.get("/hls/*", hlsController.handleHLSRequest);
   app.get("/health", hlsController.handleHealthCheck);
 
   // Start server
