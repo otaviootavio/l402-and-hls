@@ -175,3 +175,7 @@ dist
 .DS_Store
 bun.lockb
 dump.txt
+
+Dockerfile
+fly.toml
+.dockerignore
