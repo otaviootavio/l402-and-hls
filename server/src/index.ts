@@ -4,25 +4,53 @@ import compression from "compression";
 import dotenv from "dotenv";
 import { proxyConfig } from "./config/proxy-config";
 
-import { MemoryCache } from "./services/cache";
-import { PlaylistRewriter } from "./services/playlist-rewriter";
-import { ContentTypeResolver } from "./services/content-type-resolver";
-import { ProxyService } from "./services/proxy";
-import { HLSController } from "./controllers/hls-controller";
+// import { MemoryCache } from "./services/cache";
+// import { PlaylistRewriter } from "./services/playlist-rewriter";
+// import { ContentTypeResolver } from "./services/content-type-resolver";
+// import { ProxyService } from "./services/proxy";
+// import { HLSController } from "./controllers/hls-controller";
 
 import { createRateLimiter } from "./middleware/rate-limiter";
 
 import { authenticatedLndGrpc, type AuthenticatedLnd } from "lightning";
-import type { ILightningService } from "./middleware/lnap/interfaces";
 import { LightningService } from "./middleware/lnap/LightningService";
 import type { LNAPConfig } from "./middleware/lnap/types";
 import { TokenService } from "./middleware/lnap/TokenService";
 import { LNAPMiddleware } from "./middleware/lnap";
+import helmet from "helmet";
+import bodyParser from "body-parser";
 
 // Load environment variables
 dotenv.config();
 
+function validateEnv() {
+  const required = [
+    "LND_SOCKET",
+    "LND_MACAROON",
+    "LND_CERT",
+    "HMAC_SECRET",
+  ] as const;
+
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}`
+    );
+  }
+
+  // Type guard to ensure HMAC_SECRET exists and is a string
+  const hmacSecret = process.env.HMAC_SECRET;
+  if (!hmacSecret) {
+    throw new Error("HMAC_SECRET is required");
+  }
+
+  if (hmacSecret.length < 32) {
+    throw new Error("HMAC_SECRET must be at least 32 characters long");
+  }
+}
+
 async function main() {
+  validateEnv();
   // Initialize LND and L402
   const { lnd } = await authenticatedLndGrpc({
     socket: process.env.LND_SOCKET,
@@ -33,8 +61,8 @@ async function main() {
   // Configuration
   const config: LNAPConfig = {
     invoiceExpiryMinutes: 10,
-    tokenExpiryMinutes: 1,
-    requiredPaymentAmount: 1000,
+    tokenExpiryMinutes: 5,
+    requiredPaymentAmount: 1,
     hmacSecret: process.env.HMAC_SECRET || "your-secret-key",
   };
 
@@ -46,22 +74,43 @@ async function main() {
   const lnap = new LNAPMiddleware(lightningService, tokenService, config);
 
   // Initialize dependencies
-  const cache = new MemoryCache(proxyConfig);
-  const playlistRewriter = new PlaylistRewriter();
-  const contentTypeResolver = new ContentTypeResolver();
-  const proxyService = new ProxyService(
-    proxyConfig,
-    cache,
-    playlistRewriter,
-    contentTypeResolver
-  );
-  const hlsController = new HLSController(proxyService, proxyConfig);
+  // const cache = new MemoryCache(proxyConfig);
+  // const playlistRewriter = new PlaylistRewriter();
+  // const contentTypeResolver = new ContentTypeResolver();
+  // const proxyService = new ProxyService(
+  //   proxyConfig,
+  //   cache,
+  //   playlistRewriter,
+  //   contentTypeResolver
+  // );
+  // const hlsController = new HLSController(proxyService, proxyConfig);
 
   // Setup cache cleaning interval
-  setInterval(() => cache.clean(), 60000);
+  // setInterval(() => cache.clean(), 60000);
 
   // Initialize Express app
   const app = express();
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'"],
+          styleSrc: ["'self'"],
+          imgSrc: ["'self'"],
+        },
+      },
+      xssFilter: true,
+      noSniff: true,
+      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+    })
+  );
 
   // Middleware
   app.use(
@@ -73,6 +122,10 @@ async function main() {
       allowedHeaders: ["Content-Type", "Authorization", "WWW-Authenticate"],
     })
   );
+
+  app.use(bodyParser.json({ limit: "10kb" }));
+  app.use(bodyParser.urlencoded({ extended: true, limit: "10kb" }));
+
   app.use(compression());
   app.use(express.json());
   app.use(createRateLimiter());
@@ -88,8 +141,8 @@ async function main() {
     }
   );
 
-  app.get("/hls/*", hlsController.handleHLSRequest);
-  app.get("/health", hlsController.handleHealthCheck);
+  // app.get("/hls/*", hlsController.handleHLSRequest);
+  // app.get("/health", hlsController.handleHealthCheck);
 
   // Start server
   app.listen(proxyConfig.PORT, () => {

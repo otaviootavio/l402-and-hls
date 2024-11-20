@@ -27,7 +27,7 @@ interface LNAPContextType {
 const LNAPContext = createContext<LNAPContextType | null>(null);
 
 export function LNAPProvider({ children }: { children: ReactNode }) {
-  const [baseURL, setBaseURL] = useState('http://localhost:3000');
+  const [baseURL, setBaseURL] = useState(import.meta.env.VITE_LN_URL_API);
   const [currentStep, setCurrentStep] = useState(1);
   const [invoice, setInvoice] = useState<string | null>(null);
   const [paymentHash, setPaymentHash] = useState<string | null>(null);
