@@ -90,6 +90,9 @@ async function main() {
 
   // Initialize Express app
   const app = express();
+  app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
+
+
 
   app.use(
     helmet({
@@ -155,7 +158,7 @@ async function main() {
   // Graceful shutdown
   process.on("SIGTERM", () => {
     console.log("SIGTERM received. Shutting down gracefully...");
-    process.exit(0);
+    setTimeout(() => process.exit(0), 3000);
   });
 }
 
