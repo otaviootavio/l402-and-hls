@@ -27,7 +27,7 @@ export class LNAPMiddleware {
     try {
       const body = request.body as PaymentVerification;
       
-      if (!body?.paymentHash || !body?.paymentPreimage) {
+      if (!body?.paymentHash && !body?.paymentPreimage) {
         response.status(400).json({ error: 'Invalid verification data' });
         return;
       }

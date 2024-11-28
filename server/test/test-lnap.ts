@@ -108,60 +108,128 @@ async function setupTestServer() {
   }
 }
 
-async function testBasicFlow(api: any, lnd: any) {
+// Test using payment preimage verification
+async function testPaymentWithPreimage(api: any, lnd: any) { 
   try {
-    // Step 1: Get invoice
-    console.log('\nStep 1: Requesting invoice...');
+    // Step 1: Request an invoice from the API
+    console.log('\n🎫 Step 1: Requesting invoice for preimage verification test...');
     const invoiceResponse = await api.get("/auth/init");
     const { paymentHash, invoice } = invoiceResponse.data;
-    console.log('Invoice received:', { paymentHash, invoice });
+    console.log('Invoice received:', {
+      paymentHash,
+      invoice: invoice.substring(0, 30) + '...' // Truncate for readability
+    });
 
-    // Step 2: Pay invoice with retry logic
-    console.log('\nStep 2: Paying invoice...');
+    // Step 2: Pay the invoice and capture the preimage
+    console.log('\n💸 Step 2: Paying invoice...');
     const paymentResult = await retryPayment(lnd, invoice);
     if (!paymentResult?.secret) {
       throw new Error("Payment failed - no preimage received");
     }
+
+    // Convert the preimage to base64 for API verification
     const preimageBase64 = hexToBase64(paymentResult.secret);
     console.log('Payment successful:', { 
       preimageHex: paymentResult.secret, 
       preimageBase64,
-      paymentHash: base64ToHex(paymentHash) // For comparison
+      paymentHash: base64ToHex(paymentHash)
     });
 
+    // Brief pause to allow payment to be processed
     await sleep(2000);
 
-    // Step 3: Verify payment
-    console.log('\nStep 3: Verifying payment...');
+    // Step 3: Verify the payment using the preimage
+    console.log('\n✅ Step 3: Verifying payment with preimage...');
     const verificationResponse = await api.post("/auth/verify", {
-      paymentHash,
+      paymentHash, // in order to verify with preimage, we need the payment hash as well
       paymentPreimage: preimageBase64,
     });
     const { token, metadata } = verificationResponse.data;
-    console.log('Payment verified:', { token, metadata });
+    console.log('Payment verified with preimage:', { 
+      token: token.substring(0, 20) + '...', 
+      metadata 
+    });
 
-    // Step 4: Test protected route
-    console.log('\nStep 4: Testing protected route...');
+    // Step 4: Validate the token works
+    console.log('\n🔒 Step 4: Testing protected route access...');
     const protectedResponse = await api.get("/api/protected", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    console.log('Protected route response:', protectedResponse.data);
+    console.log('Protected route access successful:', protectedResponse.data);
+
+    return { token, metadata };
+
+  } catch (error) {
+    handleTestError(error);
+    throw error;
+  }
+}
+
+// Test using payment hash verification
+async function testPaymentWithHash(api: any, lnd: any) {
+  try {
+    // Step 1: Request an invoice from the API
+    console.log('\n🎫 Step 1: Requesting invoice for payment hash verification test...');
+    const invoiceResponse = await api.get("/auth/init");
+    const { paymentHash, invoice } = invoiceResponse.data;
+    console.log('Invoice received:', {
+      paymentHash,
+      invoice: invoice.substring(0, 30) + '...'
+    });
+
+    // Step 2: Pay the invoice (hash verification doesn't need preimage)
+    console.log('\n💸 Step 2: Paying invoice...');
+    const paymentResult = await retryPayment(lnd, invoice);
+    if (!paymentResult) {
+      throw new Error("Payment failed");
+    }
+    
+    console.log('Payment successful');
+
+    // Brief pause to allow payment to be processed
+    await sleep(2000);
+
+    // Step 3: Verify the payment using only the hash
+    console.log('\n✅ Step 3: Verifying payment with hash...');
+    const verificationResponse = await api.post("/auth/verify", {
+      paymentHash
+      // Note: No paymentPreimage sent in this verification method
+    });
+    const { token, metadata } = verificationResponse.data;
+    console.log('Payment verified with hash:', { 
+      token: token.substring(0, 20) + '...', 
+      metadata 
+    });
+
+    // Step 4: Validate the token works
+    console.log('\n🔒 Step 4: Testing protected route access...');
+    const protectedResponse = await api.get("/api/protected", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log('Protected route access successful:', protectedResponse.data);
 
     return { token, metadata };
   } catch (error) {
-    if (error instanceof AxiosError) {
-      console.error('API Error:', {
-        endpoint: error.config?.url,
-        method: error.config?.method,
-        status: error.response?.status,
-        data: error.response?.data,
-      });
-    } else {
-      console.error('Payment Error:', error);
-    }
+    handleTestError(error);
     throw error;
+  }
+}
+
+// Helper function to handle errors consistently
+function handleTestError(error: unknown) {
+  if (error instanceof AxiosError) {
+    console.error('❌ API Error:', {
+      endpoint: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      data: error.response?.data,
+    });
+  } else {
+    console.error('❌ Payment Error:', error);
   }
 }
 
@@ -225,15 +293,24 @@ async function runTests() {
       validateStatus: status => status < 500, // Don't throw on 4xx errors
     });
 
-    // Test 1: Basic Authentication Flow
-    console.log('\n📋 Test 1: Basic Authentication Flow');
-    const { token } = await testBasicFlow(api, testSetup.lnd);
-    console.log('✅ Basic authentication flow successful');
+    // Test 1: Authentication Flow with Preimage
+    console.log('📝 Test 1: Testing payment verification with preimage...');
+    const { token: tokenPreImage } = await testPaymentWithPreimage(api, testSetup.lnd);
+    console.log('\n✅ Preimage verification test passed!\n');
 
-    // Test 2: Token Expiry
-    console.log('\n📋 Test 2: Token Expiry');
-    await testTokenExpiry(api, token, testSetup.config);
-    console.log('✅ Token expiry test successful');
+    // Test 2: Token Expiry with Preimage
+    console.log('\n📋 Test 2: Token Expiry with preimage payment');
+    await testTokenExpiry(api, tokenPreImage, testSetup.config);
+    console.log('✅ Token from pre image expiry test successful');
+
+    console.log('📝 Test 3: Testing payment verification with payment hash...');
+    const { token: tokenHash } = await testPaymentWithHash(api, testSetup.lnd);
+    console.log('\n✅ Hash verification test passed!\n');
+
+    console.log('\n📋 Test 4: Token Expiry with payment hash');
+    await testTokenExpiry(api, tokenHash, testSetup.config);
+    console.log('✅ Token from pre image expiry test successful');
+
 
     console.log('\n✅ All tests completed successfully!');
   } catch (error) {
