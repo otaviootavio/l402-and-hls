@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { CheckCircle2, HelpCircle, Copy, ArrowLeft } from 'lucide-react';
-import { useLNAP } from '../context/LNAPContext';
+import React, { useState } from "react";
+import { CheckCircle2, HelpCircle, Copy, ArrowLeft } from "lucide-react";
+import { useLNAP } from "../context/LNAPContext";
 
 export function VerificationStep() {
   const { verifyAuth, paymentHash, setCurrentStep } = useLNAP();
-  const [preimage, setPreimage] = useState('');
+  const [preimage, setPreimage] = useState("");
   const [showHelp, setShowHelp] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -25,15 +25,21 @@ export function VerificationStep() {
   return (
     <div className="max-w-md mx-auto space-y-6">
       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-        <h4 className="text-lg font-medium text-blue-800 dark:text-blue-200 mb-2">Payment Verification</h4>
+        <h4 className="text-lg font-medium text-blue-800 dark:text-blue-200 mb-2">
+          Payment Verification
+        </h4>
         <p className="text-sm text-blue-600 dark:text-blue-300">
-          To verify your payment, please provide the payment preimage from your wallet's payment history.
+          You can verify your payment in two ways: either enter the payment
+          preimage from your wallet, or simply click verify to check if the
+          payment was received. Both methods will work.
         </p>
       </div>
 
       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm text-gray-600 dark:text-gray-400">Payment Hash:</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Payment Hash:
+          </div>
           <button
             onClick={copyPaymentHash}
             className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 flex items-center space-x-1"
@@ -54,7 +60,9 @@ export function VerificationStep() {
           </div>
           <div className="ml-3">
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              The preimage is a proof of payment. You can find it in your wallet's payment history after the payment is complete.
+              If your wallet shows the payment preimage, you can enter it for
+              immediate verification. Otherwise, just click the verify button
+              and we'll check if your payment was received.
             </p>
           </div>
         </div>
@@ -63,7 +71,10 @@ export function VerificationStep() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label htmlFor="preimage" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="preimage"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Payment Preimage
             </label>
             <button
@@ -80,21 +91,25 @@ export function VerificationStep() {
             value={preimage}
             onChange={(e) => setPreimage(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 dark:focus:border-blue-400"
-            placeholder="Enter payment preimage"
+            placeholder="Optional: Enter payment preimage"
           />
           {showHelp && (
             <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm text-gray-600 dark:text-gray-400 space-y-2">
-              <p>To find your payment preimage:</p>
+              <p>Optional: To use payment preimage verification:</p>
               <ol className="list-decimal pl-4 space-y-1">
                 <li>Open your Lightning wallet</li>
                 <li>Find this payment in your transaction history</li>
                 <li>Look for "Preimage" or "Payment Proof"</li>
                 <li>Copy and paste the preimage here</li>
               </ol>
+              <p className="mt-2">
+                Or simply click the verify button below to check if your payment
+                was received.
+              </p>
             </div>
           )}
         </div>
-        
+
         <div className="flex space-x-4">
           <button
             type="button"
@@ -109,7 +124,7 @@ export function VerificationStep() {
             className="flex-1 bg-blue-500 text-white px-6 py-3 rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-600 transition-colors"
           >
             <CheckCircle2 className="w-5 h-5" />
-            <span>Verify</span>
+            <span>Verify Payment</span>
           </button>
         </div>
       </form>

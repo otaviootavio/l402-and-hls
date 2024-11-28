@@ -5,7 +5,7 @@ import { useLNAP } from '../context/LNAPContext';
 
 export function PaymentStep() {
   const { invoice, setCurrentStep } = useLNAP();
-
+  
   const copyToClipboard = () => {
     if (invoice) {
       navigator.clipboard.writeText(invoice);
@@ -66,7 +66,6 @@ export function PaymentStep() {
         <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">Payment Instructions</h4>
         <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-2 list-decimal ml-4">
           <li>Pay the invoice using your Lightning wallet</li>
-          <li>Copy the payment preimage from your wallet's payment history</li>
           <li>Click the button below to proceed to verification</li>
         </ol>
       </div>
@@ -75,7 +74,7 @@ export function PaymentStep() {
         onClick={proceedToVerification}
         className="w-full max-w-md flex items-center justify-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-sm font-medium"
       >
-        <span>I've Paid - Enter Preimage</span>
+        <span>I've Paid</span>
         <ArrowRight className="w-5 h-5" />
       </button>
     </div>
